@@ -2,5 +2,5 @@ services:
   - type: web
     name: robo-tarot
     env: node
-    buildCommand: npm install && npx puppeteer browsers install chrome
+    buildCommand: npm install
     startCommand: node index.js
