@@ -21,8 +21,8 @@ const PRECOS = {
 const client = new Client({
     authStrategy: new LocalAuth(),
     puppeteer: {
-        headless: false, // Abre a janelinha do navegador para você ver rodando sem erro
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--timeout=60000']
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
     }
 });
 
