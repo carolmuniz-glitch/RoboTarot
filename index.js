@@ -67,7 +67,7 @@ client.on('qr', (qr) => {
 });
 
 client.on('ready', () => {
-    console.log('\nTudo pronto! Bot conectado e operando no notebook com leitor de comprovantes corrigido. 🌙✨');
+    console.log('\nTudo pronto! Bot conectado e operando no notebook com ajustes de mensagens e planilha finalizados. 🌙✨');
 });
 
 // Função para atualizar/salvar na planilha
@@ -77,7 +77,7 @@ async function salvarNoSheets(remoteJid, dados) {
             telefone: remoteJid.split('@')[0],
             dataHora: new Date().toLocaleString('pt-BR', { timeZone: 'America/Bahia' }),
             nome: dados.nome || '',
-            anamnese: dados.anamnese || '',
+            anamnese: dados.anamnese || '', // Aqui vai apenas a data de nascimento e o que a pessoa quer
             tiragem: dados.tiragem || '',
             comprovante: dados.comprovante || 'Aguardando comprovante',
             valor: dados.valor || '',
@@ -124,7 +124,9 @@ client.on('message', async (message) => {
     if (estado.etapa === 'AGUARDANDO_COMPROVANTE') {
         if (message.hasMedia) {
             try {
+                // 1. Envia a primeira mensagem solicitada
                 await client.sendMessage(remoteJid, "Analisando o seu comprovante por aqui... Só um instante, por favor! 🔍✨");
+                
                 const media = await message.downloadMedia();
                 
                 if (media && media.mimetype && media.mimetype.startsWith('image/')) {
@@ -132,15 +134,17 @@ client.on('message', async (message) => {
                     
                     await salvarNoSheets(remoteJid, {
                         nome: estado.nome || '',
-                        anamnese: estado.anamnese || '',
+                        anamnese: estado.anamnese || '', // Já vem limpa sem o nome, contendo data de nascimento + o que quer
                         tiragem: estado.tiragem || 'Oráculo',
                         comprovante: 'Recebido / Validado',
                         valor: estado.valor || '',
                         status: 'Confirmado'
                     });
                     
-                    const msgFinal = "Comprovante verificado e aprovado com sucesso, muito obrigada! 🙏✨️\n\nSua energia já está confirmada por aqui. O prazo para a entrega da sua leitura completa é de até **24 horas**. Ela será gravada com todo carinho e enviada diretamente aqui no seu WhatsApp através de **áudios explicativos + fotos das cartas**.\n\nPode ficar com o coração tranquilo!";
+                    // 2. Envia a segunda mensagem detalhada solicitada
+                    const msgFinal = `Comprovante recebido com sucesso, muito obrigada! 🙏✨️\n\nSua energia já está confirmada por aqui. O prazo para a entrega da sua leitura completa é de até **24 horas**. Ela será gravada com todo carinho e enviada diretamente aqui no seu WhatsApp através de **áudios explicativos + fotos das cartas**.\n\nPode ficar com o coração tranquilo!`;
                     await client.sendMessage(remoteJid, msgFinal);
+                    
                     await client.sendMessage(SEU_NUMERO_WHATSAPP, `🔮 *Comprovante Aprovado!* O cliente *${estado.nome || remoteJid.split('@')[0]}* enviou o comprovante para a tiragem: *${estado.tiragem || 'Oráculo'}* (${estado.valor || ''}). Status alterado para Confirmado.`);
                     return;
                 } else {
@@ -149,8 +153,8 @@ client.on('message', async (message) => {
                 }
             } catch (err) {
                 console.log("Erro ao baixar mídia:", err);
-                // Mesmo se houver falha no download, libera o fluxo para não travar a consulente
                 mudarEtapa(remoteJid, 'FINALIZADO');
+                
                 await salvarNoSheets(remoteJid, {
                     nome: estado.nome || '',
                     anamnese: estado.anamnese || '',
@@ -159,7 +163,12 @@ client.on('message', async (message) => {
                     valor: estado.valor || '',
                     status: 'Confirmado'
                 });
-                await client.sendMessage(remoteJid, "Comprovante recebido com sucesso, muito obrigada! 🙏✨️ Prazo de entrega de até 24 horas.");
+                
+                await client.sendMessage(remoteJid, "Analisando o seu comprovante por aqui... Só um instante, por favor! 🔍✨");
+                
+                const msgFinalFallback = `Comprovante recebido com sucesso, muito obrigada! 🙏✨️\n\nSua energia já está confirmada por aqui. O prazo para a entrega da sua leitura completa é de até **24 horas**. Ela será gravada com todo carinho e enviada diretamente aqui no seu WhatsApp através de **áudios explicativos + fotos das cartas**.\n\nPode ficar com o coração tranquilo!`;
+                await client.sendMessage(remoteJid, msgFinalFallback);
+                
                 await client.sendMessage(SEU_NUMERO_WHATSAPP, `🔮 *Comprovante Recebido!* O cliente *${estado.nome || remoteJid.split('@')[0]}* enviou o comprovante para a tiragem: *${estado.tiragem || 'Oráculo'}* (${estado.valor || ''}).`);
                 return;
             }
@@ -262,11 +271,17 @@ Para escolher, basta digitar o nome da tiragem desejada, digitar *0* para voltar
                 return;
             }
 
-            const partesNome = textoMensagem.split('\n')[0].split(' ');
+            // Separação inteligente: Nome separado para a coluna Nome, e o restante (data + o que quer) para a Anamnese
+            const linhas = textoMensagem.split('\n');
+            const primeiraLinha = linhas[0] || textoMensagem;
+            const partesNome = primeiraLinha.split(' ');
             const nomeCliente = partesNome.slice(0, 2).join(' ');
 
+            // Remove o nome da anamnese para salvar limpo na planilha (deixando apenas o restante da mensagem/data/questão)
+            const anamneseLimpa = textoMensagem.replace(new RegExp(nomeCliente, 'gi'), '').trim();
+
             sessoes[remoteJid].nome = nomeCliente;
-            sessoes[remoteJid].anamnese = textoMensagem;
+            sessoes[remoteJid].anamnese = anamneseLimpa;
 
             let infoMetodo = METODOS_INFO['conselho'];
             if (textoLower.includes('amor') || textoLower.includes('namorado') || textoLower.includes('relacionamento') || textoLower.includes('ex') || textoLower.includes('casamento')) {
@@ -275,11 +290,11 @@ Para escolher, basta digitar o nome da tiragem desejada, digitar *0* para voltar
                 infoMetodo = METODOS_INFO['pergunta objetiva'];
             }
 
-            mudarEtapa(remoteJid, 'CONFIRMA_SUGESTAO', { tiragem: infoMetodo.nome, valor: infoMetodo.valor, valorNumerico: infoMetodo.valorNumerico, desc: infoMetodo.desc, nome: nomeCliente, anamnese: textoMensagem });
+            mudarEtapa(remoteJid, 'CONFIRMA_SUGESTAO', { tiragem: infoMetodo.nome, valor: infoMetodo.valor, valorNumerico: infoMetodo.valorNumerico, desc: infoMetodo.desc, nome: nomeCliente, anamnese: anamneseLimpa });
             
             await salvarNoSheets(remoteJid, {
                 nome: nomeCliente,
-                anamnese: textoMensagem,
+                anamnese: anamneseLimpa,
                 tiragem: infoMetodo.nome,
                 valor: infoMetodo.valor,
                 status: 'Em análise',
