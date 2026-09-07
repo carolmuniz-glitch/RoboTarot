@@ -2,47 +2,47 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
-const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxKMlDDZb4IN6985tF_Pdu5aovfe1ZLlrRRTDFmUKcguZ2sw4zlAsxifspNySFIEJTv/exec'; 
+// COLE AQUI A SUA URL DA NOVA IMPLANTAÇÃO DO GOOGLE SHEETS:
+const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycby8vCH2N0bS7L7n5658u1f6oTDKH03MZzLzyHEJZjWGc4nIqnd0L5uLHYcoPqbplaQ/exec'; 
 const SEU_NUMERO_WHATSAPP = '557199340412@c.us';
 
-// Memória de sessão para acompanhar cada cliente e seu histórico de navegação
 const sessoes = {};
 
 const METODOS_INFO = {
     'sim ou não': {
         nome: 'Pergunta de Sim ou Não (Tarot)',
         valor: 'R$ 10',
-        desc: 'Consulta rápida com 3 cartas para respostas diretas e objetivas, com direcionamento prático.'
+        desc: 'Consulta rápida com 3 cartas para respostas diretas e objetivas, oferecendo um direcionamento prático para a sua dúvida.'
     },
     'pergunta objetiva': {
         nome: 'Pergunta Objetiva (Tarot)',
-        valor: 'R$ 20 (1 pergunta) | R$ 35 (3 perguntas) | R$ 50 (5 perguntas)',
+        valor: 'R$ 20',
         desc: 'Leitura com 6 cartas dividida em três fileiras para analisar o seu momento atual, a situação real e o resultado final com conselho.'
     },
     'conselho': {
         nome: 'Conselho / Direcionamento (Tarot)',
         valor: 'R$ 25',
-        desc: 'Focado em guiar os seus próximos passos com 6 cartas, trazendo clareza estratégica para uma decisão ou momento de incerteza.'
+        desc: 'Focado em guiar os seus próximos passos com 6 cartas, trazendo clareza estratégica para uma decisão importante ou momento de incerteza.'
     },
     'afrodite': {
         nome: 'Templo de Afrodite (Lenormand)',
         valor: 'R$ 50',
-        desc: 'Focado em analisar o campo afetivo e amoroso, detalhando os sentimentos e os rumos de uma relação.'
+        desc: 'Análise profunda e completa do campo afetivo e amoroso, detalhando os pensamentos, sentimentos e os rumos da relação para ambos.'
     },
     'diabo': {
         nome: 'Templo do Diabo (Lenormand)',
         valor: 'R$ 65',
-        desc: 'Investigação profunda de bloqueios, energias densas, sabotagens ou oposições ocultas em uma situação.'
+        desc: 'Investigação profunda de bloqueios, energias densas, ocultas, autossabotagens ou oposições que possam estar atrapalhando o seu caminho.'
     },
     'análise mensal': {
         nome: 'Análise Mensal (Lenormand)',
         valor: 'R$ 35',
-        desc: 'Panorama completo com 7 cartas para antecipar os principais eventos, energias e tendências do seu mês.'
+        desc: 'Panorama completo com 7 cartas para antecipar os principais acontecimentos, energias e tendências do seu mês.'
     },
     'caminho': {
         nome: 'Escolha de Caminho (Lenormand)',
         valor: 'R$ 25',
-        desc: 'Análise comparativa para quem está dividida entre duas opções, mostrando os desdobramentos de cada escolha.'
+        desc: 'Análise comparativa para quem está dividida entre duas opções, mostrando os desdobramentos e consequências de cada escolha.'
     }
 };
 
@@ -55,7 +55,7 @@ const client = new Client({
 });
 
 client.on('qr', (qr) => {
-    console.log('Abra este link no navegador do seu computador para ver o QR Code:');
+    console.log('Abra este link no navegador para ver o QR Code:');
     console.log(`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr)}`);
 });
 
@@ -63,26 +63,24 @@ client.on('ready', () => {
     console.log('\nTudo pronto! Bot conectado e operando no notebook. 🌙✨');
 });
 
-client.on('auth_failure', (msg) => {
-    console.error('Falha na autenticação:', msg);
-});
-
-// Função para registrar no Google Sheets
-async function salvarNoSheets(remoteJid, anamnese, tiragem, status) {
+// Função para atualizar/salvar na planilha na ordem correta
+async function salvarNoSheets(remoteJid, dados) {
     try {
         await axios.post(GOOGLE_SHEETS_URL, {
             telefone: remoteJid.split('@')[0],
             dataHora: new Date().toLocaleString('pt-BR', { timeZone: 'America/Bahia' }),
-            anamnese: anamnese,
-            tiragem: tiragem,
-            status: status
+            nome: dados.nome || '',
+            anamnese: dados.anamnese || '',
+            tiragem: dados.tiragem || '',
+            comprovante: dados.comprovante || 'Aguardando comprovante',
+            valor: dados.valor || '',
+            status: dados.status || 'Em análise'
         });
     } catch (error) {
         console.log('Erro ao salvar na planilha:', error.message);
     }
 }
 
-// Função auxiliar para mudar de etapa guardando o histórico
 function mudarEtapa(remoteJid, novaEtapa, dadosExtra = {}) {
     if (!sessoes[remoteJid]) {
         sessoes[remoteJid] = { etapa: 'INICIO', historico: [] };
@@ -94,7 +92,6 @@ function mudarEtapa(remoteJid, novaEtapa, dadosExtra = {}) {
     Object.assign(sessoes[remoteJid], dadosExtra);
 }
 
-// Função para voltar para a etapa anterior
 function voltarEtapa(remoteJid) {
     if (sessoes[remoteJid] && sessoes[remoteJid].historico.length > 0) {
         sessoes[remoteJid].etapa = sessoes[remoteJid].historico.pop();
@@ -110,42 +107,42 @@ client.on('message', async (message) => {
     const textoMensagem = message.body;
     const textoLower = textoMensagem.toLowerCase().trim();
 
-    // Inicializa a sessão se não existir
     if (!sessoes[remoteJid]) {
         sessoes[remoteJid] = { etapa: 'INICIO', historico: [] };
     }
 
-    // Se o cliente está no modo "HUMANO" e digita 0 ou voltar, ele sai do modo humano
     if (sessoes[remoteJid].etapa === 'HUMANO') {
         if (textoLower === 'voltar' || textoLower === '0') {
             voltarEtapa(remoteJid);
-            await client.sendMessage(remoteJid, "Sem problemas! Voltando para o atendimento automático com nossos oráculos. 🔮✨");
-            
-            const etapaRestaurada = sessoes[remoteJid].etapa;
-            if (etapaRestaurada === 'ESCOLHENDO_CATALOGO') {
-                const menuOpcoes = "Temos as seguintes opções de leitura:\n\n1 - Leitura com Tarot (Foco em Profundidade e Autoconhecimento)\n2 - Leitura com Lenormand/Baralho Cigano (Foco em Objetividade e Acontecimento)\n3 - Falar com a Carol\n0 - Voltar ao menu anterior\n\nDigite o número da opção desejada:";
-                await client.sendMessage(remoteJid, menuOpcoes);
-            } else if (etapaRestaurada === 'AGUARDANDO_DADOS') {
-                await client.sendMessage(remoteJid, "Por favor, me envie o seu nome completo, data de nascimento e o foco da sua consulta.✨");
-            } else {
-                const boasVindas = "Olá! Como posso te ajudar hoje? 🌿✨️\n\nSe preferir, me envie seu nome completo, data de nascimento e sua dúvida, ou digite *valores* para ver a tabela de preços.";
-                await client.sendMessage(remoteJid, boasVindas);
-            }
+            await client.sendMessage(remoteJid, "Voltando para o atendimento automático com nossos oráculos. 🔮✨");
             return;
         } else {
-            return; // Continua em atendimento humano silencioso
+            return;
         }
     }
 
-    // Comando direto para falar com você
     if (textoLower.includes('falar com a carol') || textoLower.includes('falar com carol')) {
         mudarEtapa(remoteJid, 'HUMANO');
-        await client.sendMessage(remoteJid, "Entendido! Estou chamando a Carol para assumir a conversa. 🌿 Só um minutinho que logo ela te responde por aqui pessoalmente.\n\n*(Caso queira voltar ao menu automático a qualquer momento, basta digitar 0 ou voltar!)*");
+        await client.sendMessage(remoteJid, "Entendido! Estou chamando a Carol para assumir a conversa. 🌿 Só um minutinho que logo ela te responde por aqui pessoalmente.\n\n*(Se quiser voltar ao menu automático a qualquer momento, digite 0 ou voltar!)*");
         await client.sendMessage(SEU_NUMERO_WHATSAPP, `🚨 *Alerta de Atendimento!* O cliente ${remoteJid.split('@')[0]} pediu para falar diretamente com você.`);
         return;
     }
 
-    // Consulta de Tabela de Preços Geral
+    if (textoLower.includes('como funciona') || textoLower.includes('como e feito') || textoLower.includes('como é feito') || textoLower.includes('funciona como')) {
+        const explicacaoFuncionamento = 
+`✨ *Como funcionam as leituras?* ✨
+
+🌿 Todas as consultas são realizadas de forma individual e personalizada.
+📸 Após a confirmação do pagamento, sua tiragem é gravada e entregue diretamente aqui no seu WhatsApp via **áudios explicativos + fotos detalhadas das cartas reveladas**.
+
+⏳ O prazo de entrega é de até **24 horas** após o envio do comprovante.
+
+Se quiser ver as tiragens disponíveis e valores, digite *valores* ou me envie seu nome, data de nascimento e sua questão! 💜`;
+
+        await client.sendMessage(remoteJid, explicacaoFuncionamento);
+        return;
+    }
+
     if (textoLower.includes('valor') || textoLower.includes('valores') || textoLower.includes('orçamento') || textoLower.includes('quanto custa')) {
         const menuValores = 
 `✨ *Valores dos Atendimentos com Oráculos* ✨
@@ -170,7 +167,6 @@ Para escolher, basta digitar o nome da tiragem desejada, digitar *0* para voltar
         return;
     }
 
-    // Trata o comando de VOLTAR em qualquer etapa do fluxo
     if (textoLower === 'voltar' || textoLower === '0') {
         const conseguiuVoltar = voltarEtapa(remoteJid);
         if (!conseguiuVoltar) {
@@ -180,7 +176,6 @@ Para escolher, basta digitar o nome da tiragem desejada, digitar *0* para voltar
 
     const estado = sessoes[remoteJid];
 
-    // Processamento dos Menus
     switch (estado.etapa) {
         case 'INICIO': {
             let metodoDireto = null;
@@ -193,8 +188,8 @@ Para escolher, basta digitar o nome da tiragem desejada, digitar *0* para voltar
             else if (textoLower.includes('pergunta objetiva')) metodoDireto = METODOS_INFO['pergunta objetiva'];
 
             if (metodoDireto) {
-                mudarEtapa(remoteJid, 'CONFIRMA_METODO', { tiragem: metodoDireto.nome });
-                const msgConfirmacao = `Você escolheu: *${metodoDireto.nome}*\n💰 *Valor:* ${metodoDireto.valor}\n📖 *Descrição:* ${metodoDireto.desc}\n\nGostaria de confirmar esse método?\n1 - Sim\n2 - Não\n3 - Mais opções\n0 - Voltar`;
+                mudarEtapa(remoteJid, 'CONFIRMA_METODO', { tiragem: metodoDireto.nome, valor: metodoDireto.valor, desc: metodoDireto.desc });
+                const msgConfirmacao = `🔮 *${metodoDireto.nome}*\n\n📖 *Como funciona esta tiragem:* ${metodoDireto.desc}\n💰 *Investimento:* ${metodoDireto.valor}\n\nDeseja confirmar essa escolha?\n1 - Sim, quero essa\n2 - Não, ver outras opções\n0 - Voltar`;
                 await client.sendMessage(remoteJid, msgConfirmacao);
                 return;
             }
@@ -207,43 +202,63 @@ Para escolher, basta digitar o nome da tiragem desejada, digitar *0* para voltar
 
         case 'AGUARDANDO_DADOS': {
             if (textoMensagem.length < 12) {
-                await client.sendMessage(remoteJid, "Hmm, acho que não entendi muito bem! Para eu te ajudar da melhor forma com os oráculos, por favor me envie o seu nome completo, data de nascimento e o foco da sua consulta.✨\n\nSe preferir falar diretamente comigo para resolver algo específico, basta digitar *Falar com a Carol* que eu assumo a conversa por aqui.");
+                await client.sendMessage(remoteJid, "Hmm, acho que não entendi muito bem! Para eu te ajudar da melhor forma com os oráculos, por favor me envie o seu nome completo, data de nascimento e o foco da sua consulta.✨\n\nSe preferir falar diretamente comigo para resolver algo específico, basta digitar *Falar com a Carol*.");
                 return;
             }
 
-            await salvarNoSheets(remoteJid, textoMensagem, 'Em Análise', 'Dados Recebidos');
+            // Tenta extrair o primeiro nome ou usa a mensagem inteira como nome provisório/anamnese
+            const partesNome = textoMensagem.split('\n')[0].split(' ');
+            const nomeCliente = partesNome.slice(0, 2).join(' ');
 
-            let indicacao = "";
-            let tiragemSugerida = "";
+            sessoes[remoteJid].nome = nomeCliente;
+            sessoes[remoteJid].anamnese = textoMensagem;
 
+            let infoMetodo = METODOS_INFO['conselho'];
             if (textoLower.includes('amor') || textoLower.includes('namorado') || textoLower.includes('relacionamento') || textoLower.includes('ex') || textoLower.includes('casamento')) {
-                tiragemSugerida = 'Templo de Afrodite (Lenormand)';
-                indicacao = "Pelo que me contou, a leitura mais recomendada para o seu caso é o *Templo de Afrodite (Lenormand)*. Focado em analisar o campo afetivo e amoroso, detalhando os sentimentos e os rumos de uma relação.";
+                infoMetodo = METODOS_INFO['afrodite'];
             } else if (textoLower.includes('financeiro') || textoLower.includes('dinheiro') || textoLower.includes('trabalho') || textoLower.includes('emprego') || textoLower.includes('carreira')) {
-                tiragemSugerida = 'Pergunta Objetiva / Análise Mensal';
-                indicacao = "Para a sua questão profissional/financeira, indico a *Pergunta Objetiva* ou a *Análise Mensal (Lenormand)*. Elas trazem clareza e direcionamento para os seus próximos passos na vida material.";
-            } else {
-                tiragemSugerida = 'Conselho / Direcionamento (Tarot)';
-                indicacao = "Para essa questão, a leitura ideal é o *Conselho / Direcionamento (Tarot)*. Focado em guiar os seus próximos passos com 6 cartas, trazendo clareza estratégica para uma decisão ou momento de incerteza.";
+                infoMetodo = METODOS_INFO['pergunta objetiva'];
             }
 
-            mudarEtapa(remoteJid, 'CONFIRMA_SUGESTAO', { tiragem: tiragemSugerida });
-            await client.sendMessage(remoteJid, `${indicacao}\n\nFaz sentido para você essa indicação?\n1 - Sim\n2 - Não\n3 - Mais opções\n0 - Voltar`);
+            mudarEtapa(remoteJid, 'CONFIRMA_SUGESTAO', { tiragem: infoMetodo.nome, valor: infoMetodo.valor, desc: infoMetodo.desc, nome: nomeCliente, anamnese: textoMensagem });
+            
+            await salvarNoSheets(remoteJid, {
+                nome: nomeCliente,
+                anamnese: textoMensagem,
+                tiragem: infoMetodo.nome,
+                valor: infoMetodo.valor,
+                status: 'Em análise',
+                comprovante: 'Aguardando comprovante'
+            });
+
+            const msgSugestao = `Pelo que me contou, a leitura mais recomendada para o seu caso é o *${infoMetodo.nome}*.\n\n📖 *Como funciona:* ${infoMetodo.desc}\n💰 *Investimento:* ${infoMetodo.valor}\n\nFaz sentido para você essa indicação?\n1 - Sim, quero essa\n2 - Não, ver outras opções\n0 - Voltar`;
+            await client.sendMessage(remoteJid, msgSugestao);
             break;
         }
 
         case 'CONFIRMA_SUGESTAO':
         case 'CONFIRMA_METODO': {
             if (textoLower === '1' || textoLower === 'sim') {
-                mudarEtapa(remoteJid, 'AGUARDANDO_COMPROVANTE', { tiragem: estado.tiragem || 'Oráculo Escolhido' });
-                await salvarNoSheets(remoteJid, textoMensagem, estado.tiragem || 'Oráculo Escolhido', 'Aguardando Comprovante');
-                await client.sendMessage(remoteJid, "Perfeito! A chave-pix para pagamento é: *carolmuniztarot@gmail.com*\n\nAssim que efetuar, por favor, me envie o comprovante por aqui para darmos início!");
-            } else if (textoLower === '2' || textoLower === '3' || textoLower === 'não' || textoLower === 'nao') {
+                mudarEtapa(remoteJid, 'AGUARDANDO_COMPROVANTE', { tiragem: estado.tiragem, valor: estado.valor });
+                
+                await salvarNoSheets(remoteJid, {
+                    nome: estado.nome || '',
+                    anamnese: estado.anamnese || '',
+                    tiragem: estado.tiragem,
+                    valor: estado.valor,
+                    status: 'Pendente',
+                    comprovante: 'Aguardando comprovante'
+                });
+                
+                const msgPix = `Perfeito! ✨\n\n📌 *Resumo da Escolha:*\n• *Leitura:* ${estado.tiragem}\n• *Valor:* ${estado.valor}\n\n🔑 *Chave Pix (E-mail):*\n*carolmuniztarot@gmail.com*\n\nAssim que efetuar o pagamento, por favor envie o **comprovante por aqui** para darmos início!`;
+
+                await client.sendMessage(remoteJid, msgPix);
+            } else if (textoLower === '2' || textoLower === 'não' || textoLower === 'nao') {
                 mudarEtapa(remoteJid, 'ESCOLHENDO_CATALOGO');
-                const menuOpcoes = "Tudo bem! Temos outras ferramentas para iluminar o seu caminho:\n\n1 - Leitura com Tarot (Foco em Profundidade e Autoconhecimento)\n2 - Leitura com Lenormand/Baralho Cigano (Foco em Objetividade e Acontecimento)\n3 - Falar com a Carol\n0 - Voltar ao menu anterior\n\nDigite o número da opção desejada:";
+                const menuOpcoes = "Tudo bem! Temos outras ferramentas para iluminar o seu caminho:\n\n1 - Leitura com Tarot\n2 - Leitura com Lenormand (Baralho Cigano)\n3 - Falar com a Carol\n0 - Voltar\n\nDigite o número da opção desejada:";
                 await client.sendMessage(remoteJid, menuOpcoes);
             } else {
-                await client.sendMessage(remoteJid, "Por favor, responda com uma das opções:\n1 - Sim\n2 - Não\n3 - Mais opções\n0 - Voltar");
+                await client.sendMessage(remoteJid, "Por favor, escolha uma opção válida:\n1 - Sim, quero essa\n2 - Não, ver outras opções\n0 - Voltar");
             }
             break;
         }
@@ -251,11 +266,11 @@ Para escolher, basta digitar o nome da tiragem desejada, digitar *0* para voltar
         case 'ESCOLHENDO_CATALOGO': {
             if (textoLower === '1') {
                 mudarEtapa(remoteJid, 'SELECIONANDO_TAROT');
-                const catTarot = "🔮 *Leituras com Tarot:*\n1 - Pergunta de sim ou não (R$ 10)\n2 - Pergunta Objetiva (R$ 20)\n3 - Conselho/Direcionamento (R$ 25)\n0 - Voltar ao menu anterior\n\nDigite o número da opção desejada:";
+                const catTarot = "🔮 *Leituras com Tarot:*\n1 - Pergunta de sim ou não\n2 - Pergunta Objetiva\n3 - Conselho/Direcionamento\n0 - Voltar\n\nDigite o número da opção desejada para ver detalhes e valor:";
                 await client.sendMessage(remoteJid, catTarot);
             } else if (textoLower === '2') {
                 mudarEtapa(remoteJid, 'SELECIONANDO_LENORMAND');
-                const catLen = "🃏 *Leituras com Lenormand (Baralho Cigano):*\n1 - Pergunta Objetiva (R$ 30)\n2 - Templo de Afrodite (R$ 50)\n3 - Templo do Diabo (R$ 65)\n4 - Análise Mensal (R$ 35)\n5 - Escolha de Caminho (R$ 25)\n0 - Voltar ao menu anterior\n\nDigite o número da opção desejada:";
+                const catLen = "🃏 *Leituras com Lenormand (Baralho Cigano):*\n1 - Pergunta Objetiva\n2 - Templo de Afrodite\n3 - Templo do Diabo\n4 - Análise Mensal\n5 - Escolha de Caminho\n0 - Voltar\n\nDigite o número da opção desejada para ver detalhes e valor:";
                 await client.sendMessage(remoteJid, catLen);
             } else if (textoLower === '3') {
                 mudarEtapa(remoteJid, 'HUMANO');
@@ -268,36 +283,46 @@ Para escolher, basta digitar o nome da tiragem desejada, digitar *0* para voltar
         }
 
         case 'SELECIONANDO_TAROT': {
-            let tiragem = 'Tarot';
-            if (textoLower === '1') tiragem = 'Pergunta de Sim ou Não (Tarot)';
-            else if (textoLower === '2') tiragem = 'Pergunta Objetiva (Tarot)';
-            else if (textoLower === '3') tiragem = 'Conselho/Direcionamento (Tarot)';
+            let info = METODOS_INFO['pergunta objetiva'];
+            if (textoLower === '1') info = METODOS_INFO['sim ou não'];
+            else if (textoLower === '2') info = METODOS_INFO['pergunta objetiva'];
+            else if (textoLower === '3') info = METODOS_INFO['conselho'];
 
-            mudarEtapa(remoteJid, 'AGUARDANDO_COMPROVANTE', { tiragem: tiragem });
-            await salvarNoSheets(remoteJid, textoMensagem, tiragem, 'Aguardando Comprovante');
-            await client.sendMessage(remoteJid, `Opção selecionada: *${tiragem}*.\n\nA chave-pix para pagamento é: *carolmuniztarot@gmail.com*\n\nAssim que efetuar, por favor, me envie o comprovante por aqui.`);
+            mudarEtapa(remoteJid, 'CONFIRMA_METODO', { tiragem: info.nome, valor: info.valor, desc: info.desc });
+            const msgDet = `🔮 *${info.nome}*\n\n📖 *Como funciona:* ${info.desc}\n💰 *Investimento:* ${info.valor}\n\nDeseja confirmar essa escolha?\n1 - Sim, quero essa\n2 - Não, ver outras opções\n0 - Voltar`;
+            await client.sendMessage(remoteJid, msgDet);
             break;
         }
 
         case 'SELECIONANDO_LENORMAND': {
-            let tiragem = 'Lenormand';
-            if (textoLower === '1') tiragem = 'Pergunta Objetiva (Lenormand)';
-            else if (textoLower === '2') tiragem = 'Templo de Afrodite (Lenormand)';
-            else if (textoLower === '3') tiragem = 'Templo do Diabo (Lenormand)';
-            else if (textoLower === '4') tiragem = 'Análise Mensal (Lenormand)';
-            else if (textoLower === '5') tiragem = 'Escolha de Caminho (Lenormand)';
+            let info = METODOS_INFO['pergunta objetiva'];
+            if (textoLower === '1') info = METODOS_INFO['pergunta objetiva'];
+            else if (textoLower === '2') info = METODOS_INFO['afrodite'];
+            else if (textoLower === '3') info = METODOS_INFO['diabo'];
+            else if (textoLower === '4') info = METODOS_INFO['análise mensal'];
+            else if (textoLower === '5') info = METODOS_INFO['caminho'];
 
-            mudarEtapa(remoteJid, 'AGUARDANDO_COMPROVANTE', { tiragem: tiragem });
-            await salvarNoSheets(remoteJid, textoMensagem, tiragem, 'Aguardando Comprovante');
-            await client.sendMessage(remoteJid, `Opção selecionada: *${tiragem}*.\n\nA chave-pix para pagamento é: *carolmuniztarot@gmail.com*\n\nAssim que efetuar, por favor, me envie o comprovante por aqui.`);
+            mudarEtapa(remoteJid, 'CONFIRMA_METODO', { tiragem: info.nome, valor: info.valor, desc: info.desc });
+            const msgDet = `🃏 *${info.nome}*\n\n📖 *Como funciona:* ${info.desc}\n💰 *Investimento:* ${info.valor}\n\nDeseja confirmar essa escolha?\n1 - Sim, quero essa\n2 - Não, ver outras opções\n0 - Voltar`;
+            await client.sendMessage(remoteJid, msgDet);
             break;
         }
 
         case 'AGUARDANDO_COMPROVANTE': {
             mudarEtapa(remoteJid, 'FINALIZADO');
-            await salvarNoSheets(remoteJid, textoMensagem, estado.tiragem || 'Oráculo', 'Comprovante Recebido');
-            await client.sendMessage(remoteJid, "Comprovante recebido com sucesso, muito obrigada! 🙏✨️ \nSua energia já está confirmada por aqui. O prazo para a entrega da sua leitura completa é de até *24 horas*. Assim que eu finalizar o atendimento, te envio tudo por aqui. Pode ficar com o coração tranquilo!");
-            await client.sendMessage(SEU_NUMERO_WHATSAPP, `🔮 *Novo Comprovante Recebido!* O cliente ${remoteJid.split('@')[0]} enviou o comprovante para a tiragem: *${estado.tiragem || 'Oráculo'}*.`);
+            
+            await salvarNoSheets(remoteJid, {
+                nome: estado.nome || '',
+                anamnese: estado.anamnese || '',
+                tiragem: estado.tiragem || 'Oráculo',
+                comprovante: 'Recebido / Enviado',
+                valor: estado.valor || '',
+                status: 'Pendente'
+            });
+            
+            const msgFinal = "Comprovante recebido com sucesso, muito obrigada! 🙏✨️\n\nSua energia já está confirmada por aqui. O prazo para a entrega da sua leitura completa é de até **24 horas**. Ela será gravada com todo carinho e enviada diretamente aqui no seu WhatsApp através de **áudios explicativos + fotos das cartas**.\n\nPode ficar com o coração tranquilo!";
+            await client.sendMessage(remoteJid, msgFinal);
+            await client.sendMessage(SEU_NUMERO_WHATSAPP, `🔮 *Novo Comprovante Recebido!* O cliente ${estado.nome || remoteJid.split('@')[0]} enviou o comprovante para a tiragem: *${estado.tiragem || 'Oráculo'}* (${estado.valor || ''}).`);
             break;
         }
 
