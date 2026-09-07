@@ -2,7 +2,7 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const axios = require('axios');
 
-const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbvOB8raDACE0VtJoEaJicbrhbpjUDnhHSI9lm-nitrJLYaC_cs06LvTYG9Hk1mw_w_N/exec'; 
+const GOOGLE_SHEETS_URL = 'https://script.google.com/macros/s/AKfycbxKMlDDZb4IN6985tF_Pdu5aovfe1ZLlrRRTDFmUKcguZ2sw4zlAsxifspNySFIEJTv/exec';
 const SEU_NUMERO_WHATSAPP = '557199340412@c.us';
 
 // Memória de sessão para acompanhar cada cliente
